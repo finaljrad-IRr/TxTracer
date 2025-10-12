@@ -1,21 +1,16 @@
 import React from "react"
-import {FaExclamationTriangle} from "react-icons/fa"
 
 import ReactMarkdown from "react-markdown"
 
-import {
-  calculateGasConsumption,
-  calculateGasConsumptionWithDescription,
-  infoOf,
-} from "ton-assembly/dist/generator/instructions"
-
-import {Category, type Instruction} from "@features/spec/tvm-specification.types"
+import {Category, type DocsLink, type Instruction} from "@features/spec/tvm-specification.types"
 
 import {prettySubCategoryName} from "@app/pages/InstructionsPage/lib/formatCategory.ts"
 
 import {RegisterSquare} from "@app/pages/InstructionsPage/components/InstructionTable/RegisterSquare.tsx"
 
 import type {Register} from "@features/spec/signatures/stack-signatures-schema.ts"
+
+import {HighlightedAssembly} from "@app/pages/InstructionsPage/components/InstructionTable/HighlightedAssembly.tsx"
 
 import {useProcessedMarkdown} from "../../hooks/useProcessedMarkdown"
 
@@ -24,6 +19,7 @@ import {formatGasRanges} from "./utils.ts"
 import InlineOperand from "./InlineOperand"
 import OperandsView from "./OperandsView"
 import ArithmeticCalculator from "./ArithmeticCalculator"
+import ExampleItem from "./ExampleItem"
 
 interface InstructionDetailProps {
   readonly instruction: Instruction
@@ -37,9 +33,8 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
   const {description, layout, category} = instruction
   const version = layout.version ?? 0
 
-  const opcodeInfo = infoOf(instructionName)
-  const gasConsumption = opcodeInfo ? calculateGasConsumptionWithDescription(opcodeInfo) : []
-  const simpleGasConsumption = opcodeInfo ? calculateGasConsumption(opcodeInfo) : []
+  const gasConsumption = instruction.description.gas ?? []
+  const simpleGasConsumption = gasConsumption.map(it => it.value)
   const formattedGas = formatGasRanges(simpleGasConsumption)
 
   const displayedOperands = instruction.operands ?? description.operands
@@ -60,6 +55,14 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
       return <RegisterSquare key={reg.var_name} variable={reg.var_name} />
     }
     return null
+  }
+
+  const inputRegisters = instruction.signature.inputs?.registers ?? []
+  const outputRegisters = instruction.signature.outputs?.registers ?? []
+
+  const links: DocsLink[] = []
+  if (description.docs_links) {
+    links.push(...description.docs_links)
   }
 
   return (
@@ -92,20 +95,20 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
               <span className={styles.metadataValue}>{formattedGas}</span>
             </div>
 
-            {(instruction.signature.inputs?.registers?.length ?? 0) > 0 && (
+            {inputRegisters.length > 0 && (
               <div className={styles.metadataItem}>
                 <span className={styles.metadataLabel}>Read registers:</span>
                 <span className={styles.metadataValue}>
-                  {instruction.signature.inputs?.registers?.map(reg => registerPresentation(reg))}
+                  {inputRegisters.map(reg => registerPresentation(reg))}
                 </span>
               </div>
             )}
 
-            {(instruction.signature.outputs?.registers?.length ?? 0) > 0 && (
+            {outputRegisters.length > 0 && (
               <div className={styles.metadataItem}>
                 <span className={styles.metadataLabel}>Write registers:</span>
                 <span className={styles.metadataValue}>
-                  {instruction.signature.outputs?.registers?.map(reg => registerPresentation(reg))}
+                  {outputRegisters.map(reg => registerPresentation(reg))}
                 </span>
               </div>
             )}
@@ -149,6 +152,8 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
             {description.short && description.short !== description.long && (
               <ReactMarkdown components={markdownComponents}>{description.short}</ReactMarkdown>
             )}
+
+            <h3 className={styles.detailSectionTitle}>Details</h3>
             <ReactMarkdown components={markdownComponents}>{description.long}</ReactMarkdown>
           </div>
         </div>
@@ -162,7 +167,9 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
                   <span className={styles.implementationsHeader}>
                     {impl.exact ? "Exact Equivalent:" : "Approximately Equivalent:"}
                   </span>
-                  <pre className={styles.codeBlock}>{impl.instructions.join("\n")}</pre>
+                  <div className={styles.implementationCode}>
+                    <HighlightedAssembly code={impl.instructions.join("\n")} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -191,102 +198,31 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
           <div className={styles.detailSection}>
             <h3 className={styles.detailSectionTitle}>Examples</h3>
             <div className={styles.examplesGridContainer}>
-              {description.examples.map((example, index) => {
-                const isExceptional = example.exit_code !== undefined && example.exit_code !== 0
-                let exitCondition = ""
-                if (isExceptional && description.exit_codes) {
-                  const foundExit = description.exit_codes.find(
-                    ec => parseInt(ec.errno, 10) === example.exit_code,
-                  )
-                  if (foundExit) {
-                    exitCondition = foundExit.condition
-                  }
-                }
+              {description.examples.map((example, index) => (
+                <ExampleItem
+                  key={index}
+                  example={example}
+                  exitCodes={description.exit_codes}
+                  markdownComponents={markdownComponents}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
-                return (
-                  <div
-                    key={index}
-                    className={`${styles.exampleItem} ${isExceptional ? styles.exampleItemError : ""}`}
-                  >
-                    {isExceptional && (
-                      <div className={styles.exampleErrorHeader}>
-                        <span className={styles.errorIcon}>
-                          <FaExclamationTriangle />
-                        </span>
-                        <span>Leads to Exit Code: {example.exit_code}</span>
-                        {exitCondition && (
-                          <p className={styles.errorConditionText}>
-                            Condition:{" "}
-                            <ReactMarkdown components={markdownComponents}>
-                              {exitCondition}
-                            </ReactMarkdown>
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <div className={styles.exampleInstructions}>
-                      <h5 className={styles.exampleStructTitle}>Instructions:</h5>
-                      <pre className={styles.codeBlock}>
-                        {(() => {
-                          const instructions = example.instructions
-                          const hasExplicitMain = instructions.some(instr => instr.is_main === true)
-
-                          return instructions.map((instr, i, arr) => {
-                            let isPreparatory = false
-                            if (hasExplicitMain) {
-                              isPreparatory = instr.is_main !== true
-                            } else {
-                              isPreparatory = i < arr.length - 1
-                            }
-
-                            return (
-                              <div
-                                key={i}
-                                className={isPreparatory ? styles.preparatoryInstruction : ""}
-                              >
-                                <code>{instr.instruction}</code>
-                                {instr.comment && (
-                                  <span
-                                    className={`${styles.comment} ${isPreparatory ? styles.preparatoryComment : ""}`}
-                                  >
-                                    {" # "}
-                                    {instr.comment}
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          })
-                        })()}
-                      </pre>
-                    </div>
-
-                    <div className={styles.exampleStack}>
-                      <div className={styles.stackHalf}>
-                        <h5 className={styles.exampleStructTitle}>Stack Input:</h5>
-                        <pre className={styles.codeBlock}>
-                          {[...example.stack.input].reverse().map((item, i) => (
-                            <div key={i}>
-                              <code>{item}</code>
-                            </div>
-                          ))}
-                          {example.stack.input.length === 0 && <span>(empty)</span>}
-                        </pre>
-                      </div>
-                      <div className={styles.stackHalf}>
-                        <h5 className={styles.exampleStructTitle}>Stack Output:</h5>
-                        <pre className={styles.codeBlock}>
-                          {[...example.stack.output].reverse().map((item, i) => (
-                            <div key={i}>
-                              <code>{item}</code>
-                            </div>
-                          ))}
-                          {example.stack.output.length === 0 && <span>(empty)</span>}
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+        {links.length > 0 && (
+          <div className={styles.detailSection}>
+            <h3 className={styles.detailSectionTitle}>Documentation</h3>
+            <div className={styles.linksContainer}>
+              <ul className={styles.linksList}>
+                {links.map((link, index) => (
+                  <li key={index}>
+                    <a href={link.url} target="_blank" rel="noopener noreferrer">
+                      {link.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}
