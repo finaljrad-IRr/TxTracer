@@ -59,6 +59,7 @@ function appendFiftInstructions(
 function InstructionsPage() {
   const [spec, setSpec] = useState<TvmSpec | null>(null)
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
+  const [anchorInstruction, setAnchorInstruction] = useState<string | null>(null)
 
   const stored = loadStoredSettings()
 
@@ -76,8 +77,31 @@ function InstructionsPage() {
     setSpec(tvmSpecData as unknown as TvmSpec)
   }, [])
 
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1) // Remove the '#'
+      if (hash && hash !== anchorInstruction) {
+        setAnchorInstruction(hash)
+        setExpandedRows(prev => ({
+          ...prev,
+          [hash]: true,
+        }))
+      }
+    }
+
+    handleHashChange()
+    window.addEventListener("hashchange", handleHashChange)
+    return () => window.removeEventListener("hashchange", handleHashChange)
+  }, [anchorInstruction])
+
   const toggleColumn = (key: InstructionColumnKey) => {
     setSearchColumns(prev => (prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]))
+  }
+
+  const resetAnchor = () => {
+    setAnchorInstruction(null)
+    window.history.replaceState(null, "", window.location.pathname)
+    setExpandedRows({})
   }
 
   const instructions = useMemo(() => {
@@ -162,6 +186,22 @@ function InstructionsPage() {
 
   const filteredInstructions = useMemo(() => {
     const q = query.trim().toLowerCase()
+
+    if (anchorInstruction) {
+      const allInstructions = spec?.instructions ?? {}
+      if (allInstructions[anchorInstruction]) {
+        return {[anchorInstruction]: allInstructions[anchorInstruction]}
+      } else {
+        // Clear anchor if the instruction is not found
+        setTimeout(() => {
+          setAnchorInstruction(null)
+          window.history.replaceState(null, "", window.location.pathname)
+          setExpandedRows({})
+        }, 0)
+        return filteredByCategory
+      }
+    }
+
     if (!q) return filteredByCategory
 
     const entries = Object.entries(filteredByCategory)
@@ -183,7 +223,7 @@ function InstructionsPage() {
       if (match) next[name] = instruction
     }
     return next
-  }, [query, filteredByCategory, searchColumns])
+  }, [query, filteredByCategory, searchColumns, anchorInstruction, spec?.instructions])
 
   const sortedInstructions = useMemo(() => {
     const entries = Object.entries(filteredInstructions)
@@ -252,6 +292,9 @@ function InstructionsPage() {
   }
 
   const handleRowClick = (instructionName: string) => {
+    // don't allow collapsing the instruction in anchor mode
+    if (anchorInstruction) return
+
     setExpandedRows(prev => ({
       ...prev,
       [instructionName]: !prev[instructionName],
@@ -266,45 +309,57 @@ function InstructionsPage() {
 
       <main className={styles.appContainer} role="main" aria-label="TVM Instructions">
         <div className={styles.mainContent}>
-          <div className={styles.toolbar} role="search" aria-label="Toolbar">
-            <SortSelector value={sortMode} onChange={setSortMode} />
+          {!anchorInstruction && (
+            <>
+              <div className={styles.toolbar} role="search" aria-label="Toolbar">
+                <SortSelector value={sortMode} onChange={setSortMode} />
 
-            <div className={styles.searchToolbar}>
-              <SearchColumnsSelector value={searchColumns} onToggle={toggleColumn} />
-              <div className={styles.searchInputContainer}>
-                <SearchInput
-                  value={query}
-                  onChange={setQuery}
-                  onSubmit={() => {}}
-                  placeholder="Search instructions"
-                  compact={true}
-                  buttonLabel="Search"
-                  autoFocus={true}
-                />
+                <div className={styles.searchToolbar}>
+                  <SearchColumnsSelector value={searchColumns} onToggle={toggleColumn} />
+                  <div className={styles.searchInputContainer}>
+                    <SearchInput
+                      value={query}
+                      onChange={setQuery}
+                      onSubmit={() => {}}
+                      placeholder="Search instructions"
+                      compact={true}
+                      buttonLabel="Search"
+                      autoFocus={true}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div>
-            <CategoryTabs
-              categories={categories}
-              selected={selectedCategory}
-              onSelect={cat => {
-                setSelectedCategory(cat)
-                setSelectedSubCategory("All")
-              }}
-            />
-            {subCategories.length > 0 && (
-              <div className={styles.subCategoryAndDocsContainer}>
+              <div>
                 <CategoryTabs
-                  categories={subCategories}
-                  selected={selectedSubCategory}
-                  onSelect={setSelectedSubCategory}
-                  label="Subcategory:"
+                  categories={categories}
+                  selected={selectedCategory}
+                  onSelect={cat => {
+                    setSelectedCategory(cat)
+                    setSelectedSubCategory("All")
+                  }}
                 />
-                {selectedCategory === "continuation" && <ContinuationsDocsBanner />}
+                {subCategories.length > 0 && (
+                  <div className={styles.subCategoryAndDocsContainer}>
+                    <CategoryTabs
+                      categories={subCategories}
+                      selected={selectedSubCategory}
+                      onSelect={setSelectedSubCategory}
+                      label="Subcategory:"
+                    />
+                    {selectedCategory === "continuation" && <ContinuationsDocsBanner />}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
+          {anchorInstruction && (
+            <div className={styles.anchorIndicator}>
+              <span>Showing: {anchorInstruction}</span>
+              <Button variant="outline" size="sm" onClick={resetAnchor}>
+                Back to table
+              </Button>
+            </div>
+          )}
           <InstructionTable
             instructions={sortedInstructions}
             expandedRows={expandedRows}
