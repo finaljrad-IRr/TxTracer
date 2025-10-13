@@ -74,7 +74,13 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
             {displayedOperands && displayedOperands.length > 0 && (
               <span className={styles.operandsDisplay}>
                 {displayedOperands.map((_, idx) => (
-                  <InlineOperand key={idx} instruction={instruction} operandIndex={idx} />
+                  <InlineOperand
+                    key={idx}
+                    instructionName={instructionName}
+                    instruction={instruction}
+                    operandIndex={idx}
+                    inDetails={true}
+                  />
                 ))}
               </span>
             )}
@@ -86,6 +92,7 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
               <span className={styles.metadataLabel}>Since Version:</span>
               <span className={styles.metadataValue}>{version}</span>
             </div>
+
             <div className={styles.metadataItem}>
               <span className={styles.metadataLabel}>Category:</span>
               <span className={styles.metadataValue}>{prettySubCategoryName(category)}</span>
@@ -94,6 +101,23 @@ const InstructionDetail: React.FC<InstructionDetailProps> = ({
               <span className={styles.metadataLabel}>Gas:</span>
               <span className={styles.metadataValue}>{formattedGas}</span>
             </div>
+
+            {instruction.implementation && (
+              <div className={styles.metadataItem}>
+                <span className={styles.metadataLabel}>Implementation:</span>
+                <span className={styles.metadataValue}>
+                  <a
+                    href={`https://github.com/ton-blockchain/ton/blob/${instruction.implementation.commit_hash}/${instruction.implementation.file_path}#L${instruction.implementation.line_number}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.implementationLink}
+                  >
+                    {instruction.implementation.file_path.split("/").pop()}:
+                    {instruction.implementation.line_number}
+                  </a>
+                </span>
+              </div>
+            )}
 
             {inputRegisters.length > 0 && (
               <div className={styles.metadataItem}>

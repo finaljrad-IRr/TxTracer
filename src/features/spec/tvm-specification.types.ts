@@ -23,6 +23,14 @@ export interface Instruction {
   readonly effects?: Effect[]
   readonly operands?: string[]
   readonly control_flow?: ControlFlowOfInstruction
+  readonly implementation?: ImplementationInfo
+}
+
+export interface ImplementationInfo {
+  readonly commit_hash: string
+  readonly file_path: string
+  readonly line_number: number
+  readonly function_name: string
 }
 
 export interface GasConsumptionEntry {
@@ -34,6 +42,7 @@ export enum Category {
   Arithmetic = "arithmetic",
   Cell = "cell",
   Continuation = "continuation",
+  Stack = "stack",
 }
 
 export enum SubCategory {
