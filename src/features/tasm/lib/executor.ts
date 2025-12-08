@@ -4,9 +4,8 @@ import {Cell, contractAddress, toNano, TupleBuilder} from "@ton/core"
 import {GetMethodError, type SandboxContract, type TreasuryContract} from "@ton/sandbox"
 import {Blockchain} from "@ton/sandbox"
 import {createMappingInfo} from "ton-assembly/dist/trace/mapping"
-import type {StackElement} from "ton-assembly/dist/trace"
-
 import type {AssemblyMapping} from "ton-source-map"
+import type {StackElement} from "ton-assembly/dist/trace"
 
 import {type ExitCode, findExitCode} from "@features/txTrace/lib/traceTx.ts"
 
